@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}Iniciar Sesión - GymViolet{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card p-4 shadow">
+            <h2 class="text-center mb-4" style="color: var(--violet-main)">Identificarse</h2>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    {{ form.as_p }}
+                </div>
+                <button type="submit" class="btn btn-violet w-100">Entrar al Gym</button>
+            </form>
+            <p class="mt-3 text-center text-secondary">
+                ¿No tienes cuenta? <a href="{% url 'signup' %}" style="color: var(--violet-main)">Regístrate aquí</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

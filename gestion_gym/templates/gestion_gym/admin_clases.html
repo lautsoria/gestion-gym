@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="mb-4">Control de Asistencia</h2>
+<div class="card p-3">
+    <table class="table table-dark table-hover">
+        <thead>
+            <tr>
+                <th>Clase</th>
+                <th>Horario</th>
+                <th>Inscritos</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in clases %}
+            <tr>
+                <td>{{ c.nombre_actividad }}</td>
+                <td>{{ c.horario|date:"d/m H:i" }}</td>
+                <td>{{ c.inscripcion_set.count }}</td>
+                <td>
+                    <a href="{% url 'asistencia' c.id %}" class="btn btn-sm btn-violet text-white">Ver Alumnos</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

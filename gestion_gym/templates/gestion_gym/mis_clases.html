@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Mi Agenda - GymViolet{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2 class="mb-4">Mi Agenda Personal</h2>
+        
+        {% if reservas %}
+            <div class="list-group">
+                {% for r in reservas %}
+                    <div class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between align-items-center mb-2 rounded">
+                        <div>
+                            <h5 class="mb-1" style="color: var(--violet-main)">{{ r.clase.nombre_actividad }}</h5>
+                            <p class="mb-0 text-secondary">
+                                <i class="bi bi-calendar"></i> {{ r.clase.horario|date:"d/m" }} a las {{ r.clase.horario|date:"H:i" }} hs
+                            </p>
+                            <small class="text-info">Profesor: {{ r.clase.instructor }}</small>
+                        </div>
+                        <a href="{% url 'cancelar' r.id %}" 
+                           class="btn btn-sm btn-outline-danger" 
+                           onclick="return confirm('¿Seguro quieres cancelar tu lugar en esta clase?')">
+                           Cancelar
+                        </a>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center mt-5 p-5 border border-secondary border-dashed rounded">
+                <p class="text-secondary">Aún no tienes clases reservadas.</p>
+                <a href="{% url 'horarios_gym' %}" class="btn btn-violet">Ver Horarios</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

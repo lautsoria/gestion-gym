@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Horarios - GymViolet{% endblock %}
+
+{% block content %}
+<h1 class="text-center mb-5">Próximas Clases</h1>
+
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    {% for clase in lista_de_clases %}
+    <div class="col">
+        <div class="card h-100 p-3">
+            <div class="card-body">
+                <h3 class="card-title h4 mb-3" style="color: var(--violet-main)">{{ clase.nombre_actividad }}</h3>
+                <p class="card-text mb-1"><strong>Instructor:</strong> {{ clase.instructor }}</p>
+                <p class="card-text mb-1"><strong>Hora:</strong> {{ clase.horario|date:"H:i" }} hs</p>
+                <p class="card-text text-secondary">Cupos: {{ clase.capacidad_maxima }}</p>
+                
+                {% if clase.capacidad_maxima > 0 %}
+                    <a href="{% url 'anotarse' clase.id %}" class="btn btn-violet w-100 mt-3">Reservar Lugar</a>
+                {% else %}
+                    <button class="btn btn-secondary w-100 mt-3" disabled>Clase Llena</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
