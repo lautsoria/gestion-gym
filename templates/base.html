@@ -65,10 +65,19 @@
                     <a class="nav-link" href="{% url 'horarios_gym' %}">Horarios</a>
                     <a class="nav-link" href="{% url 'mis_clases' %}">Mi Agenda</a>
                     
-                    
+                    <span class="nav-link text-info">
+                        Créditos: <strong>{{ user.perfil.clases_disponibles }}</strong>
+                    </span>
                     {% if user.is_staff %}
                         <a class="nav-link text-info fw-bold" href="{% url 'admin_clases' %}">Asistencia</a>
                         <a class="nav-link text-warning fw-bold" href="{% url 'reporte_ganancias' %}">Reporte</a>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link text-warning fw-bold" href="{% url 'admin:index' %}">
+                            <i class="bi bi-gear-fill"></i> Panel Admin
+                        </a>
+                    </li>
+
                     {% endif %}
                         
 

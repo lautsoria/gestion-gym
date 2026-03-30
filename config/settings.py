@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import dj_database_url
 from pathlib import Path
 from dotenv import load_dotenv # Importamos la librería
 
@@ -20,13 +21,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Ahora leemos la clave desde el archivo secreto
 SECRET_KEY = os.getenv('SECRET_KEY')
-DEBUG = os.getenv('DEBUG') == 'True'
-ALLOWED_HOSTS = []
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# Esto permite que funcione en tu PC y en la URL que te de Render
+ALLOWED_HOSTS = ['*'] # Para la primera prueba, luego lo limitamos
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -38,6 +42,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware'
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -70,11 +75,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600
+    )
 }
 
 
@@ -115,3 +121,68 @@ USE_TZ = True
 STATIC_URL = 'static/'
 LOGIN_REDIRECT_URL = '/gym/horarios/'
 LOGOUT_REDIRECT_URL = '/gym/horarios/'
+
+JAZZMIN_SETTINGS = {
+    # Título de la ventana del navegador
+    "site_title": "Gym Violet Admin",
+    # Título en la pantalla de logueo
+    "site_header": "Gym Violet",
+    # Logo de la marca (puedes poner un png en static y rutearlo aquí)
+    "site_brand": "Panel de Control",
+    # Mensaje de bienvenida
+    "welcome_sign": "Bienvenido al Sistema de Gestión del Gimnasio",
+    # Copyright en el footer
+    "copyright": "Gym Violet Ltd",
+    
+    # Iconos para las secciones del menú lateral
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "auth.user": "fas fa-user",
+        "gestion_gym.Clase": "fas fa-dumbbell",
+        "gestion_gym.Pago": "fas fa-money-bill-wave",
+        "gestion_gym.Inscripcion": "fas fa-clipboard-list",
+    },
+    
+    # Nombres más bonitos para las secciones
+    "order_with_respect_to": ["gestion_gym.Clase", "gestion_gym.Pago", "gestion_gym.Inscripcion", "auth"],
+    
+    # Colores de los botones y links (Violeta para seguir tu estética)
+    "accent": "primary",
+    "dark_mode_theme": "darkly", # Esto activa un modo oscuro muy pro
+    "show_ui_builder": True,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-dark",
+    "accent": "accent-primary",
+    "navbar": "navbar-dark", # Esto lo hace oscuro
+    "no_navbar_border": False,
+    "navbar_fixed": False,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": False,
+    "sidebar": "sidebar-dark-primary", # Aquí es donde se pone el tono oscuro pro
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": False,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "darkly", # Este es el tema oscuro por defecto
+    "dark_mode_theme": "darkly",
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success"
+    }
+}
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles' 
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

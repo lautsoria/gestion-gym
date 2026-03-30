@@ -11,4 +11,5 @@ urlpatterns = [
     path('cancelar/<int:inscripcion_id>/', views.cancelar_reserva, name='cancelar'),
     path('admin-clases/', views.lista_clases_admin, name='admin_clases'),
     path('asistencia/<int:clase_id>/', views.detalle_asistencia, name='asistencia'),
+    path('marcar-asistencia/<int:inscripcion_id>/', views.marcar_asistencia, name='marcar_asistencia'),
 ]

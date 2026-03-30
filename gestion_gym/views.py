@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from .models import Clase
+from .models import Clase, Perfil
 from django.db.models import Sum
 from .models import Pago
 from django.utils import timezone
@@ -13,6 +13,7 @@ from django.urls import reverse_lazy
 from django.views import generic
 from django.contrib.admin.views.decorators import staff_member_required
 from .forms import RegistroCompletoForm 
+from django.contrib.auth.models import User
 
 
 
@@ -56,36 +57,79 @@ def reporte_ganancias(request):
     }
     return render(request, 'gestion_gym/reporte.html', contexto)
 
+@staff_member_required
+def reporte_ganancias(request):
+    ahora = timezone.now()
+    # 1. Seguimos calculando ingresos por mes para el balance financiero
+    pagos_mes = Pago.objects.filter(fecha_pago__year=ahora.year, fecha_pago__month=ahora.month)
+    
+    efectivo = pagos_mes.filter(metodo='EFECTIVO').aggregate(Sum('monto'))['monto__sum'] or 0
+    transferencia = pagos_mes.filter(metodo='TRANSFERENCIA').aggregate(Sum('monto'))['monto__sum'] or 0
+    otros = pagos_mes.exclude(metodo__in=['EFECTIVO', 'TRANSFERENCIA']).aggregate(Sum('monto'))['monto__sum'] or 0
+    
+    total_mensual = efectivo + transferencia + otros
+
+    # 2. NUEVA LÓGICA DE MOROSOS: Usuarios con saldo de clases negativo
+    # Traemos los perfiles que deben clases y cargamos los datos del usuario para no hacer muchas consultas
+    perfiles_deudores = Perfil.objects.filter(clases_disponibles__lt=0).select_related('usuario')
+    
+    morosos = []
+    for p in perfiles_deudores:
+        u = p.usuario
+        u.clases_deuda = abs(p.clases_disponibles) # Convertimos -2 en 2 para mostrarlo bonito
+        # Buscamos su último pago para saber hace cuánto no pone plata
+        u.ultimo = Pago.objects.filter(usuario=u).order_by('-fecha_pago').first()
+        morosos.append(u)
+
+    contexto = {
+        'total_mensual': total_mensual,
+        'efectivo': efectivo,
+        'transferencia': transferencia,
+        'otros': otros,
+        'cantidad_pagos': pagos_mes.count(),
+        'mes_nombre': ahora.strftime('%B %Y'),
+        'morosos': morosos,
+        'cantidad_morosos': len(morosos),
+    }
+    return render(request, 'gestion_gym/reporte.html', contexto)
+
 
 
 
 
 @login_required
 def inscribir_clase(request, clase_id):
+    # En lugar de request.user.perfil (que falla si no existe),
+    # usamos get_or_create que asegura que el perfil EXISTA antes de seguir.
+    perfil, created = Perfil.objects.get_or_create(usuario=request.user)
+    
+    # Limpiamos vencimientos (esto devuelve el objeto perfil actualizado)
+    perfil = perfil.limpiar_vencidos()
+    
     clase = get_object_or_404(Clase, id=clase_id)
     
-    # 1. Verificar si el usuario YA está anotado
-    ya_anotado = Inscripcion.objects.filter(usuario=request.user, clase=clase).exists()
+    # Verificamos si ya está inscripto
+    ya_inscripto = Inscripcion.objects.filter(usuario=request.user, clase=clase).exists()
     
-    if ya_anotado:
-        messages.warning(request, f"Ya estás anotado en la clase de {clase.nombre_actividad}.")
-    
-    # 2. Si no está anotado, verificar cupo
-    elif clase.capacidad_maxima > 0:
-        # Creamos la inscripción
-        Inscripcion.objects.create(usuario=request.user, clase=clase)
-        
-        # Restamos el cupo
-        clase.capacidad_maxima -= 1
-        clase.save()
-        
-        messages.success(request, f"¡Te has anotado con éxito a {clase.nombre_actividad}!")
-    
+    if not ya_inscripto:
+        if clase.capacidad_maxima > 0:
+            Inscripcion.objects.create(usuario=request.user, clase=clase)
+            
+            # Restamos cupo (permite negativos por tu nueva lógica)
+            perfil.clases_disponibles -= 1
+            perfil.save()
+            
+            # Restamos capacidad física de la clase
+            clase.capacidad_maxima -= 1
+            clase.save()
+            
+            messages.success(request, f"Inscripto con éxito en {clase.nombre_actividad}.")
+        else:
+            messages.error(request, "Lo sentimos, no hay más lugar físico en esta clase.")
     else:
-        messages.error(request, "Lo sentimos, ya no quedan cupos para esta clase.")
+        messages.warning(request, "Ya te encuentras anotado en esta clase.")
         
-    return redirect('horarios_gym')
-
+    return redirect('mis_clases')
 
 
 
@@ -134,3 +178,15 @@ def detalle_asistencia(request, clase_id):
         'clase': clase,
         'anotados': anotados
     })
+
+@staff_member_required
+def marcar_asistencia(request, inscripcion_id):
+    # Buscamos la inscripción específica
+    inscripcion = get_object_or_404(Inscripcion, id=inscripcion_id)
+    
+    # Cambiamos el estado (si era False pasa a True, y viceversa)
+    inscripcion.asistio = not inscripcion.asistio
+    inscripcion.save()
+    
+    # Redirigimos de vuelta a la lista de esa clase
+    return redirect('asistencia', clase_id=inscripcion.clase.id)

@@ -2,27 +2,50 @@
 
 {% block content %}
 <div class="mb-4">
-    <a href="{% url 'admin_clases' %}" class="text-secondary">← Volver al listado</a>
-    <h2 class="mt-2 text-violet">{{ clase.nombre_actividad }}</h2>
-    <p class="text-muted">Instructor: {{ clase.instructor }} | {{ clase.horario }}</p>
+    <a href="{% url 'admin_clases' %}" class="text-secondary text-decoration-none">← Volver al listado</a>
+    <h2 class="mt-2" style="color: var(--violet-main)">Asistencia: {{ clase.nombre_actividad }}</h2>
+    <p class="text-secondary">{{ clase.horario|date:"d/m/Y H:i" }} hs | Prof. {{ clase.instructor }}</p>
 </div>
 
 <div class="card p-4 shadow">
-    <h5 class="mb-4">Lista de Alumnos Anotados</h5>
+    <h5 class="mb-4 text-white-50">Alumnos Anotados ({{ anotados.count }})</h5>
+    
     {% if anotados %}
-        <ol class="list-group list-group-numbered">
+        <div class="list-group">
             {% for a in anotados %}
-                <li class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between align-items-start">
-                    <div class="ms-2 me-auto">
-                        <div class="fw-bold">{{ a.usuario.first_name }} {{ a.usuario.last_name }}</div>
-                        Usuario: {{ a.usuario.username }} | Email: {{ a.usuario.email }}
+                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center mb-2 rounded">
+                    <div>
+                        <span class="text-white fw-bold">{{ a.usuario.first_name }} {{ a.usuario.last_name }}</span>
+                        <br>
+                        <small class="text-secondary">@{{ a.usuario.username }} | {{ a.usuario.email }}</small>
                     </div>
-                    <span class="badge bg-violet rounded-pill">{{ a.fecha_reserva|date:"d/m H:i" }}</span>
-                </li>
+                    
+                    <div>
+                        <span class="text-white fw-bold">{{ a.usuario.first_name }}</span>
+                        {% if a.usuario.perfil.clases_disponibles < 0 %}
+                            <span class="badge bg-danger ms-2">DEBE {{ a.usuario.perfil.clases_disponibles }} CLASE/S</span>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex align-items-center">
+                        {% if a.asistio %}
+                            <a href="{% url 'marcar_asistencia' a.id %}" class="btn btn-success btn-sm">
+                                <i class="bi bi-check-circle"></i> Presente
+                            </a>
+                        {% else %}
+                            <a href="{% url 'marcar_asistencia' a.id %}" class="btn btn-outline-secondary btn-sm">
+                                Marcar Presente
+                            </a>
+                        {% endif %}
+                    </div>
+                    
+                    
+                </div>
             {% endfor %}
-        </ol>
+        </div>
     {% else %}
-        <div class="alert alert-secondary">No hay alumnos anotados todavía.</div>
+        <div class="text-center p-4">
+            <p class="text-secondary italic">No hay alumnos inscriptos en esta clase aún.</p>
+        </div>
     {% endif %}
 </div>
 {% endblock %}
