@@ -18,11 +18,12 @@
                             </p>
                             <small class="text-info">Profesor: {{ r.clase.instructor }}</small>
                         </div>
-                        <a href="{% url 'cancelar' r.id %}" 
-                           class="btn btn-sm btn-outline-danger" 
-                           onclick="return confirm('¿Seguro quieres cancelar tu lugar en esta clase?')">
-                           Cancelar
-                        </a>
+                        
+                        <form action="{% url 'cancelar' r.id %}" method="POST" class="d-inline" onsubmit="return confirm('¿Seguro quieres cancelar tu lugar en esta clase?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+                        </form>
+                        
                     </div>
                 {% endfor %}
             </div>

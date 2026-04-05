@@ -21,24 +21,25 @@
                     </div>
                     
                     <div>
-                        <span class="text-white fw-bold">{{ a.usuario.first_name }}</span>
                         {% if a.usuario.perfil.clases_disponibles < 0 %}
-                            <span class="badge bg-danger ms-2">DEBE {{ a.usuario.perfil.clases_disponibles }} CLASE/S</span>
+                            <span class="badge bg-danger ms-2">DEBE {{ a.usuario.perfil.clases_disponibles|stringformat:"d"|slice:"1:" }} CLASE/S</span>
                         {% endif %}
                     </div>
+
                     <div class="d-flex align-items-center">
-                        {% if a.asistio %}
-                            <a href="{% url 'marcar_asistencia' a.id %}" class="btn btn-success btn-sm">
-                                <i class="bi bi-check-circle"></i> Presente
-                            </a>
-                        {% else %}
-                            <a href="{% url 'marcar_asistencia' a.id %}" class="btn btn-outline-secondary btn-sm">
-                                Marcar Presente
-                            </a>
-                        {% endif %}
+                        <form action="{% url 'marcar_asistencia' a.id %}" method="POST">
+                            {% csrf_token %}
+                            {% if a.asistio %}
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="bi bi-check-circle"></i> Presente
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                    Marcar Presente
+                                </button>
+                            {% endif %}
+                        </form>
                     </div>
-                    
-                    
                 </div>
             {% endfor %}
         </div>

@@ -10,12 +10,14 @@ from django.contrib.auth.models import Group
 
 
 
-# Configuración personalizada para Clases
+# gestion_gym/admin.py
 @admin.register(Clase)
 class ClaseAdmin(admin.ModelAdmin):
     list_display = ('nombre_actividad', 'instructor', 'horario', 'capacidad_maxima')
-    list_filter = ('nombre_actividad', 'horario')
-    search_fields = ('instructor',)
+    # Esto te crea un buscador y filtros por fecha a la derecha:
+    search_fields = ('nombre_actividad', 'instructor')
+    list_filter = ('horario', 'nombre_actividad') 
+    date_hierarchy = 'horario' # Agrega una barrita de navegación por fechas arriba
 
 @admin.register(Pago)
 class PagoAdmin(admin.ModelAdmin):

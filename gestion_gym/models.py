@@ -12,7 +12,11 @@ class Clase(models.Model):
     capacidad_maxima = models.PositiveIntegerField()
 
     def __str__(self):
+    
         return f"{self.nombre_actividad} - {self.horario.strftime('%d/%m %H:%M')}"
+    class Meta:
+        verbose_name = "Clase"
+        verbose_name_plural = "Clases"
 
 class Pago(models.Model):
     METODOS_PAGO = [('EFECTIVO', 'Efectivo'), ('TRANSFERENCIA', 'Transferencia'), ('TARJETA', 'Tarjeta')]
@@ -23,15 +27,15 @@ class Pago(models.Model):
     fecha_pago = models.DateField(default=timezone.now)
     metodo = models.CharField(max_length=20, choices=METODOS_PAGO, default='EFECTIVO')
     
+    
     def save(self, *args, **kwargs):
-        perfil, created = Perfil.objects.get_or_create(usuario=self.usuario)
-        perfil.clases_disponibles += self.cantidad_clases
+        es_nuevo = self.pk is None # Verificamos si apenas se está creando
+        super().save(*args, **kwargs) # Guardamos el pago primero
         
-        
-        perfil.fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
-        
-        perfil.save()
-        super().save(*args, **kwargs)
+        if es_nuevo:
+            perfil, created = Perfil.objects.get_or_create(usuario=self.usuario)
+            perfil.clases_disponibles += self.cantidad_clases
+            perfil.save()
 
    
 

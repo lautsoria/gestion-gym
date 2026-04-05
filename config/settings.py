@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'gestion_gym',
+    'kiosco',
 ]
 
 MIDDLEWARE = [
@@ -106,9 +107,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-ar'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Argentina/Buenos_Aires'
 
 USE_I18N = True
 
@@ -148,8 +149,13 @@ JAZZMIN_SETTINGS = {
     
     # Colores de los botones y links (Violeta para seguir tu estética)
     "accent": "primary",
-    "dark_mode_theme": "darkly", # Esto activa un modo oscuro muy pro
+    "default_theme_mode": 'dark', 
     "show_ui_builder": True,
+
+    "topmenu_links": [
+    {"name": "Ir al Kiosco", "url": "kiosco", "permissions": ["auth.view_user"]},
+    {"name": "Reporte Ganancias", "url": "reporte_ganancias"},
+    ],
 }
 
 JAZZMIN_UI_TWEAKS = {

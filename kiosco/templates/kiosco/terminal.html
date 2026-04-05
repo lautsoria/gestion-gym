@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-md-7">
+        <div class="card p-3 shadow-sm bg-dark text-white">
+            <h4>📦 Productos Disponibles</h4>
+            <input type="text" id="buscador" class="form-control mb-3 bg-secondary text-white border-0" placeholder="Buscar por nombre...">
+            <div class="list-group" id="lista-productos" style="max-height: 500px; overflow-y: auto;">
+                {% for p in productos %}
+                <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-dark text-white border-secondary" 
+                        onclick="agregarAlCarrito({{ p.id }}, '{{ p.nombre|escapejs }}', {{ p.precio|stringformat:'.2f' }}, {{ p.stock }})">
+                    {{ p.nombre }}
+                    <span class="badge bg-primary rounded-pill">${{ p.precio }} (Stock: {{ p.stock }})</span>
+                </button>
+                {% empty %}
+                <div class="alert alert-warning">No hay productos con stock disponible.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card p-3 border-primary shadow-sm">
+            <h4 class="text-primary">🛒 Carrito de Compra</h4>
+            <table class="table table-sm" id="tabla-carrito">
+                <thead><tr><th>Prod.</th><th>Cant.</th><th>Subt.</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <hr>
+            <div class="text-end">
+                <h5 class="text-secondary">Subtotal: <span id="total-compra">$0</span></h5>
+            </div>
+            
+            <div class="mt-4 bg-light p-3 rounded border">
+                <label class="fw-bold text-dark">Paga con:</label>
+                <input type="number" id="paga-con" class="form-control form-control-lg mb-2 border-primary" placeholder="Ej: 5000" oninput="calcularVuelto()">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="text-dark">Vuelto:</h4>
+                    <h3 class="text-success fw-bold" id="vuelto">$0</h3>
+                </div>
+                <button class="btn btn-success btn-lg w-100 mt-3 shadow" onclick="finalizarVenta()">
+                    <i class="bi bi-currency-dollar"></i> FINALIZAR VENTA
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let carrito = [];
+let total = 0;
+
+function agregarAlCarrito(id, nombre, precio, stockMax) {
+    const item = carrito.find(p => p.id === id);
+    if (item) {
+        if (item.cantidad < stockMax) {
+            item.cantidad++;
+        } else {
+            alert("¡Límite de stock alcanzado!");
+        }
+    } else {
+        carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1 });
+    }
+    renderizarCarrito();
+}
+
+// ESTA FUNCIÓN FALTABA
+function eliminar(index) {
+    carrito.splice(index, 1);
+    renderizarCarrito();
+}
+
+function renderizarCarrito() {
+    const tbody = document.querySelector('#tabla-carrito tbody');
+    tbody.innerHTML = '';
+    total = 0;
+    
+    carrito.forEach((p, index) => {
+        let subtotal = p.precio * p.cantidad;
+        total += subtotal;
+        tbody.innerHTML += `
+            <tr class="align-middle">
+                <td>${p.nombre}</td>
+                <td><span class="badge bg-secondary">${p.cantidad}</span></td>
+                <td>$${subtotal.toFixed(2)}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-danger" onclick="eliminar(${index})">
+                        <i class="bi bi-trash"></i> x
+                    </button>
+                </td>
+            </tr>`;
+    });
+    
+    document.getElementById('total-compra').innerText = '$' + total.toFixed(2);
+    calcularVuelto();
+}
+
+function calcularVuelto() {
+    const paga = document.getElementById('paga-con').value;
+    const vueltoSpan = document.getElementById('vuelto');
+    
+    if (!paga || paga <= 0) {
+        vueltoSpan.innerText = '$0';
+        vueltoSpan.className = 'text-success fw-bold';
+        return;
+    }
+
+    const vuelto = paga - total;
+    if (vuelto < 0) {
+        vueltoSpan.innerText = 'Falta dinero';
+        vueltoSpan.className = 'text-danger fw-bold';
+    } else {
+        vueltoSpan.innerText = '$' + vuelto.toFixed(2);
+        vueltoSpan.className = 'text-success fw-bold';
+    }
+}
+
+function finalizarVenta() {
+    if (carrito.length === 0) return alert("El carrito está vacío");
+    
+    if (confirm("¿Confirmar venta y descontar stock?")) {
+        fetch('{% url "procesar_venta" %}', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRFToken': '{{ csrf_token }}' 
+            },
+            body: JSON.stringify({ carrito: carrito })
+        })
+        .then(async response => {
+            const data = await response.json(); // Leemos el JSON del servidor
+            
+            if (response.ok) {
+                alert("✅ Venta registrada con éxito.");
+                location.reload();
+            } else {
+                // Aquí mostramos el mensaje de error real que armamos en views.py
+                alert("❌ No se pudo concretar la venta:\n" + data.message);
+            }
+        })
+        .catch(error => {
+            alert("❌ Error de conexión al procesar la venta.");
+        });
+    }
+}
+
+// Buscador
+document.getElementById('buscador').addEventListener('input', function(e) {
+    let filtro = e.target.value.toLowerCase();
+    document.querySelectorAll('#lista-productos button').forEach(btn => {
+        btn.style.setProperty('display', btn.innerText.toLowerCase().includes(filtro) ? 'flex' : 'none', 'important');
+    });
+});
+</script>
+{% endblock %}
