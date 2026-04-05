@@ -96,6 +96,7 @@ def inscribir_clase(request, clase_id):
                 # ese último lugar mientras este código se ejecuta (Punto 4)
                 clase = Clase.objects.select_for_update().get(id=clase_id)
                 perfil, created = Perfil.objects.get_or_create(usuario=request.user)
+                perfil.limpiar_vencidos
 
                 # 2. VALIDACIÓN: Evitar duplicados
                 if Inscripcion.objects.filter(usuario=request.user, clase=clase).exists():
@@ -200,6 +201,4 @@ def marcar_asistencia(request, inscripcion_id):
         return redirect('asistencia', clase_id=inscripcion.clase.id)
     return redirect('admin_clases') 
 
-from django.contrib.auth.models import User
-from django.http import HttpResponse
 
