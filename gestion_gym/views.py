@@ -203,10 +203,3 @@ def marcar_asistencia(request, inscripcion_id):
 from django.contrib.auth.models import User
 from django.http import HttpResponse
 
-def crear_admin_magico(request):
-    # Cambiá 'admin_gym' y 'Password123' por lo que vos quieras
-    if not User.objects.filter(username='admin_gym').exists():
-        User.objects.create_superuser('admin_gym', 'admin@email.com', 'TuPasswordSegura123')
-        return HttpResponse("✅ Admin creado con éxito. ¡Borrá esta función ahora!")
-    else:
-        return HttpResponse("⚠️ El admin ya existe.")
