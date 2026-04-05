@@ -150,7 +150,7 @@ JAZZMIN_SETTINGS = {
     # Colores de los botones y links (Violeta para seguir tu estética)
     "accent": "primary",
     "default_theme_mode": 'dark', 
-    "show_ui_builder": True,
+    "show_ui_builder": False,
 
     "topmenu_links": [
     {"name": "Ir al Kiosco", "url": "kiosco", "permissions": ["auth.view_user"]},
@@ -167,19 +167,20 @@ JAZZMIN_UI_TWEAKS = {
     "accent": "accent-primary",
     "navbar": "navbar-dark", # Esto lo hace oscuro
     "no_navbar_border": False,
-    "navbar_fixed": False,
+    "navbar_fixed": True,
     "layout_boxed": False,
     "footer_fixed": False,
-    "sidebar_fixed": False,
+    "sidebar_fixed": True,
     "sidebar": "sidebar-dark-primary", # Aquí es donde se pone el tono oscuro pro
     "sidebar_nav_small_text": False,
     "sidebar_disable_expand": False,
     "sidebar_nav_child_indent": False,
-    "sidebar_nav_compact_style": False,
+    "sidebar_nav_compact_style": True,
     "sidebar_nav_legacy_style": False,
     "sidebar_nav_flat_style": False,
     "theme": "darkly", # Este es el tema oscuro por defecto
     "dark_mode_theme": "darkly",
+    "changeform_format": "horizontal_tabs",
     "button_classes": {
         "primary": "btn-primary",
         "secondary": "btn-secondary",
