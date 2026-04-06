@@ -346,11 +346,7 @@ def generar_data_masiva(request):
 
     messages.success(request, f"🚀 Se cargaron {cantidad} usuarios en tiempo récord.")
     return redirect('recepcion')
-import random
-from django.contrib.auth.models import User
-from .models import Perfil, Producto, MovimientoCaja, Pago # Ajustá los imports a tus apps
-from django.utils import timezone
-from datetime import timedelta
+
 
 @staff_member_required
 def generar_data_test(request):
