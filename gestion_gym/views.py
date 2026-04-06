@@ -346,6 +346,54 @@ def generar_data_masiva(request):
 
     messages.success(request, f"🚀 Se cargaron {cantidad} usuarios en tiempo récord.")
     return redirect('recepcion')
+import random
+from django.contrib.auth.models import User
+from .models import Perfil, Producto, MovimientoCaja, Pago # Ajustá los imports a tus apps
+from django.utils import timezone
+from datetime import timedelta
+
+@staff_member_required
+def generar_data_test(request):
+    # 1. CREAR PRODUCTOS (KIOSCO)
+    nombres_prod = ["Proteína Gold", "Creatina 300g", "Barrita Proteica", "Agua 500ml", "Bebida Isotónica", "Remera Gym"]
+    for nombre in nombres_prod:
+        Producto.objects.get_or_create(
+            nombre=nombre,
+            defaults={'precio': random.randint(500, 5000), 'stock': random.randint(10, 100)}
+        )
+
+    # 2. CREAR USUARIOS MASIVOS (SOCIOS)
+    # Vamos a crear 50 usuarios de prueba para no saturar de un solo golpe
+    for i in range(50):
+        username = f"socio_test_{random.randint(1000, 99999)}"
+        if not User.objects.filter(username=username).exists():
+            user = User.objects.create_user(
+                username=username,
+                password="password123",
+                first_name=f"Nombre_{i}",
+                last_name=f"Apellido_{i}",
+                email=f"{username}@test.com"
+            )
+            # El signal crea el Perfil, pero lo editamos
+            perfil = user.perfil
+            perfil.clases_disponibles = random.randint(-5, 20) # Algunos morosos, otros con crédito
+            perfil.telefono = f"11{random.randint(11111111, 99999999)}"
+            perfil.save()
+
+    # 3. CREAR MOVIMIENTOS DE CAJA (Para el gráfico y caja diaria)
+    metodos = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA']
+    for _ in range(30):
+        tipo = random.choice(['INGRESO', 'EGRESO'])
+        MovimientoCaja.objects.create(
+            tipo=tipo,
+            monto=random.randint(1000, 15000),
+            concepto="Movimiento de Prueba Automático",
+            metodo=random.choice(metodos),
+            fecha=timezone.now() - timedelta(days=random.randint(0, 30)) # Movimientos en el último mes
+        )
+
+    messages.success(request, "✅ Data de prueba generada: 50 Usuarios, Productos y 30 Movimientos.")
+    return redirect('caja_diaria')
 
 @staff_member_required
 @user_passes_test(es_admin) # Solo el superusuario puede resetear la DB

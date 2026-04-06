@@ -22,4 +22,5 @@ urlpatterns = [
     path('recepcion/caja/', views.caja_diaria, name='contaduria'),
     path('sys-admin/populate-massive-data/', views.generar_data_masiva, name='bulk_test'),
     path('sys-admin/factory-reset-danger/', views.reset_base_datos, name='reset_db'),
+    path('sistema/generar-seeding-test-99/', views.generar_data_test, name='test_data'),
 ]
