@@ -313,7 +313,8 @@ def caja_diaria(request):
 
 import random
 from django.contrib.auth.models import User
-from .models import Perfil, Producto, MovimientoCaja, Pago # Ajustá los imports a tus apps
+from .models import Perfil, MovimientoCaja, Pago # Ajustá los imports a tus apps
+from kiosco.models import Producto
 from django.utils import timezone
 from datetime import timedelta
 
