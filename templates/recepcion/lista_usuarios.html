@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Recepción | Gym Violet{% endblock %}
+{% block content %}
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto text-center">
+            <h2 class="mb-4" style="color: var(--violet-main); font-weight: bold; letter-spacing: 1px;">
+                SISTEMA DE RECEPCIÓN
+            </h2>
+            <form method="GET" action="{% url 'recepcion' %}" class="d-flex shadow-sm">
+                <input type="text" name="q" class="form-control me-2 py-2" 
+                    placeholder="Buscar por Nombre, Email o DNI..." value="{{ request.GET.q }}">
+                <button class="btn btn-violet px-4" type="submit">BUSCAR</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-lg">
+        <div class="card-body p-0">
+            <table class="table table-dark">
+                <tr>
+                        <th>NOMBRE</th>
+                        <th>EMAIL</th>
+                        <TH>NUMERO</TH>
+                        <th>ESTADO CUPOS</th>
+                        <th>VENCIMIENTO</th>
+                        <th>CARGAR</th>
+
+                    </tr>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td>{{ u.first_name }} {{ u.last_name }}</td>
+                        <td>{{ u.email }}</td>
+                        <td>{{ u.username }}</td>
+                        <td>
+                            {% if u.perfil.clases_disponibles <= 0 %}
+                                <span class="badge bg-danger p-2">DEUDA: {{ u.perfil.clases_disponibles }}</span>
+                            {% else %}
+                                <span class="badge bg-success p-2">DISPONIBLES: {{ u.perfil.clases_disponibles }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ u.perfil.fecha_vencimiento|date:"d/m/Y"|default:"--" }}</td>
+                        <td>
+                            <button type="button" class="btn btn-violet" data-bs-toggle="modal" data-bs-target="#modalPago{{ u.id }}">
+                                CARGAR CUPOS
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% for u in usuarios %}
+    <div class="modal fade" id="modalPago{{ u.id }}" tabindex="-1" aria-labelledby="label{{ u.id }}" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered" style="z-index: 1060;"> 
+            <div class="modal-content" style="background-color: #1e1e1e; border: 1px solid var(--violet-main); opacity: 1 !important;">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-white" id="label{{ u.id }}">Cargar cupos: {{ u.first_name }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="{% url 'actualizar_cupos' u.id %}">
+                    {% csrf_token %}
+                    <div class="modal-body text-white">
+                        <div class="mb-3">
+                            <label class="form-label">Cupos a Cargar (Pack)</label>
+                            <input type="number" name="cupos_sumar" class="form-control" value="12" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Monto ($)</label>
+                            <input type="number" name="monto" class="form-control" placeholder="0.00" step="0.01">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-violet">Confirmar Pago</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+{% endblock %}

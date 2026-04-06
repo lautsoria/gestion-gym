@@ -51,6 +51,22 @@
             outline: none;
             box-shadow: 0 0 5px var(--violet-main);
         }
+        /* Corrección de Modales Bugueados */
+        .modal-backdrop {
+            z-index: 1040 !important;
+        }
+        .modal {
+            z-index: 1050 !important;
+            background: rgba(0, 0, 0, 0.5); /* Oscurece el fondo manualmente si falla el backdrop */
+        }
+
+        /* Evita que el modal se vea transparente sobre el fondo oscuro */
+        .modal-content {
+            background-color: var(--card-dark) !important;
+            border: 1px solid var(--violet-main) !important;
+            opacity: 1 !important;
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -74,12 +90,9 @@
                         <a class="nav-link text-info fw-bold" href="{% url 'admin_clases' %}">Asistencia</a>
                         <a class="nav-link text-warning fw-bold" href="{% url 'reporte_ganancias' %}">Reporte</a>
                         <a class="nav-link text-warning fw-bold"href="{% url 'kiosco' %}">Kiosco</a>
+                        <a class="nav-link text-success fw-bold" href="{% url 'recepcion' %}">Recepción</a>
+                        <a class="nav-link text-success fw-bold" href="{% url 'caja_diaria' %}">Contaduría</a>
                     
-                    <li class="nav-item">
-                        <a class="nav-link text-warning fw-bold" href="{% url 'admin:index' %}">
-                            <i class="bi bi-gear-fill"></i> Panel Admin
-                        </a>
-                    </li>
 
                     {% endif %}
                         

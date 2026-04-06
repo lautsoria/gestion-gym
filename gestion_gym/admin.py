@@ -3,7 +3,7 @@ from .models import Clase, Pago, Inscripcion
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import Pago
+from .models import Pago,Perfil
 from django.utils import timezone
 from django.utils.html import format_html
 from django.contrib.auth.models import Group
@@ -34,7 +34,11 @@ class InscripcionAdmin(admin.ModelAdmin):
     
 
 
-# Queremos que el Admin de Usuarios muestre info del Gym
+@admin.register(Perfil)
+class PerfilAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'clases_disponibles', 'fecha_vencimiento')
+    list_editable = ('clases_disponibles', 'fecha_vencimiento')
+    
 class UserGymAdmin(BaseUserAdmin):
     # Dejamos solo los cupos y la fecha del último pago
     list_display = BaseUserAdmin.list_display + ('cupos_restantes','vencimiento', 'ultimo_pago_fecha')

@@ -16,6 +16,7 @@ def procesar_venta(request):
         try:
             data = json.loads(request.body)
             carrito = data.get('carrito', [])
+            metodo_pago = data.get('metodo', 'EFECTIVO')
             
             if not carrito:
                 return JsonResponse({'status': 'error', 'message': 'Carrito vacío'}, status=400)
@@ -56,7 +57,8 @@ def procesar_venta(request):
                 # 2. Si todo es válido, guardamos la Venta en la DB
                 nueva_venta = Venta.objects.create(
                     total=total_venta,
-                    vendedor=request.user
+                    vendedor=request.user,
+                    metodo=metodo_pago
                 )
 
                 # 3. Creamos los detalles

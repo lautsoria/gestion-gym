@@ -38,6 +38,14 @@
                     <h4 class="text-dark">Vuelto:</h4>
                     <h3 class="text-success fw-bold" id="vuelto">$0</h3>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label text-white">Método de Pago:</label>
+                    <select id="metodo_pago" class="form-select bg-dark text-white border-violet">
+                        <option value="EFECTIVO">💵 Efectivo</option>
+                        <option value="TRANSFERENCIA">📱 Transferencia</option>
+                        <option value="TARJETA">💳 Tarjeta</option>
+                    </select>
+                </div>
                 <button class="btn btn-success btn-lg w-100 mt-3 shadow" onclick="finalizarVenta()">
                     <i class="bi bi-currency-dollar"></i> FINALIZAR VENTA
                 </button>
@@ -118,28 +126,36 @@ function calcularVuelto() {
 function finalizarVenta() {
     if (carrito.length === 0) return alert("El carrito está vacío");
     
-    if (confirm("¿Confirmar venta y descontar stock?")) {
+    // Capturamos el método seleccionado
+    const metodoSeleccionado = document.getElementById("metodo_pago").value;
+    
+    if (confirm(`¿Confirmar venta en ${metodoSeleccionado} y descontar stock?`)) {
         fetch('{% url "procesar_venta" %}', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
                 'X-CSRFToken': '{{ csrf_token }}' 
             },
-            body: JSON.stringify({ carrito: carrito })
+            // IMPORTANTE: Agregamos 'metodo' al JSON
+            body: JSON.stringify({ 
+                carrito: carrito,   
+                metodo: metodoSeleccionado 
+            })
         })
         .then(async response => {
-            const data = await response.json(); // Leemos el JSON del servidor
+            const data = await response.json();
             
             if (response.ok) {
                 alert("✅ Venta registrada con éxito.");
                 location.reload();
             } else {
-                // Aquí mostramos el mensaje de error real que armamos en views.py
-                alert("❌ No se pudo concretar la venta:\n" + data.message);
+                // Aquí verás el error real (ej: si falta stock o si falló la caja)
+                alert("❌ Error del servidor:\n" + (data.message || "Error desconocido"));
             }
         })
         .catch(error => {
-            alert("❌ Error de conexión al procesar la venta.");
+            console.error("Error:", error);
+            alert("❌ Error de conexión. Verificá la consola del navegador.");
         });
     }
 }

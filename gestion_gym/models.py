@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from datetime import timedelta
 
 
 class Clase(models.Model):
@@ -34,8 +35,30 @@ class Pago(models.Model):
         
         if es_nuevo:
             perfil, created = Perfil.objects.get_or_create(usuario=self.usuario)
-            perfil.clases_disponibles += self.cantidad_clases
+            hoy = timezone.now().date()
+
+            # --- MEJORA PROFESIONAL ---
+            # Si el socio ya tiene cupos pero su vencimiento es lejano, 
+            # quizás deberías sumarlos en lugar de borrarlos.
+            # Pero si tu regla es "Se pierde lo anterior", tu IF actual está perfecto.
+
+            if perfil.clases_disponibles > 0:
+                # Aquí es donde se pierden los cupos viejos al entrar el pago nuevo
+                perfil.clases_disponibles = self.cantidad_clases
+            else:
+                # Si debía (-2) y compra 10, queda con 8.
+                perfil.clases_disponibles += self.cantidad_clases
+            
+            perfil.fecha_vencimiento = hoy + timedelta(days=30)
             perfil.save()
+            MovimientoCaja.objects.create(
+                tipo='INGRESO',
+                monto=self.monto,
+                concepto=f"Pago Cuota: {self.usuario.get_full_name() or self.usuario.username}",
+                categoria='CUOTAS',
+                usuario_afectado=self.usuario
+            )
+            
 
    
 
@@ -58,9 +81,14 @@ class Inscripcion(models.Model):
         return f"{self.usuario.username} en {self.clase.nombre_actividad} ({estado})"
     
 class Perfil(models.Model):
+    db_index=True
     usuario = models.OneToOneField(User, on_delete=models.CASCADE)
     clases_disponibles = models.IntegerField(default=0)
     fecha_vencimiento = models.DateField(null=True, blank=True) 
+    telefono = models.CharField(max_length=20, blank=True, null=True)
+    class Meta:
+        verbose_name = "Perfil"
+        verbose_name_plural = "Perfiles"
     
     def limpiar_vencidos(self):
         """Lógica para resetear cupos si pasó la fecha"""
@@ -71,7 +99,7 @@ class Perfil(models.Model):
         return self
     
     def __str__(self):
-        return f"{self.usuario.username} - Créditos: {self.clases_disponibles} (Vence: {self.fecha_vencimiento})"  
+        return f"{self.usuario.username} - Créditos: {self.clases_disponibles} (Vence: {self.fecha_vencimiento})- {self.telefono}"  
 
 
 # Estos "signals" crean automáticamente un perfil cuando se registra un usuario nuevo
@@ -79,3 +107,19 @@ class Perfil(models.Model):
 def crear_perfil(sender, instance, created, **kwargs):
     if created:
         Perfil.objects.create(usuario=instance)    
+
+
+class MovimientoCaja(models.Model):
+    TIPO_CHOICES = [('INGRESO', 'Ingreso'), ('EGRESO', 'Egreso')]
+    METODOS_PAGO = [('EFECTIVO', 'Efectivo'), ('TRANSFERENCIA', 'Transferencia'), ('TARJETA', 'Tarjeta')]
+    
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    concepto = models.CharField(max_length=200)
+    metodo = models.CharField(max_length=20, choices=METODOS_PAGO, default='EFECTIVO') # <-- Cambio aquí
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    usuario_afectado = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.tipo} ({self.metodo}): ${self.monto}"
+    

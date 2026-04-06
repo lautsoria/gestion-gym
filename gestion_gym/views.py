@@ -13,8 +13,10 @@ from django.contrib.admin.views.decorators import staff_member_required
 from .forms import RegistroCompletoForm 
 from django.contrib.auth.models import User
 from kiosco.models import Venta
-from django.db import transaction
-from .models import Clase, Inscripcion, Perfil
+from django.db import transaction,models
+from django.db.models import Q
+from .models import Clase, Inscripcion, Perfil,MovimientoCaja
+from django.core.paginator import Paginator
 
 
 class RegistroUsuario(generic.CreateView):
@@ -22,6 +24,23 @@ class RegistroUsuario(generic.CreateView):
     success_url = reverse_lazy('login')
     template_name = 'registration/signup.html'
 
+    def form_valid(self, form):
+        # 1. Guardamos el usuario primero
+        response = super().form_valid(form)
+        user = self.object
+        
+        # 2. Guardamos el nombre y apellido en el objeto User
+        user.first_name = form.cleaned_data.get('first_name')
+        user.last_name = form.cleaned_data.get('last_name')
+        user.email = form.cleaned_data.get('email')
+        user.save()
+
+        # 3. Guardamos el teléfono en el Perfil (que ya existe por el signal post_save)
+        perfil = user.perfil
+        perfil.telefono = form.cleaned_data.get('telefono')
+        perfil.save()
+        
+        return response
 
 
 
@@ -38,28 +57,6 @@ def ver_horarios(request):
 @staff_member_required
 def reporte_ganancias(request):
     ahora = timezone.now()
-    
-    # --- 1. DATOS DE CUOTAS (App gestion_gym) ---
-    pagos_mes = Pago.objects.filter(fecha_pago__year=ahora.year, fecha_pago__month=ahora.month)
-    cuotas_mensual = pagos_mes.aggregate(Sum('monto'))['monto__sum'] or 0
-    cuotas_historico = Pago.objects.aggregate(Sum('monto'))['monto__sum'] or 0
-
-    # --- 2. DATOS DE KIOSCO (App kiosco) ---
-    ventas_mes = Venta.objects.filter(fecha__year=ahora.year, fecha__month=ahora.month)
-    kiosco_mensual = ventas_mes.aggregate(Sum('total'))['total__sum'] or 0
-    kiosco_historico = Venta.objects.aggregate(Sum('total'))['total__sum'] or 0
-
-    # --- 3. UNIFICACIÓN DE VARIABLES ---
-    # Sumamos ambos para que el HTML reciba el total final en la misma bolsa
-    total_mensual = cuotas_mensual + kiosco_mensual
-    total_historico = cuotas_historico + kiosco_historico
-
-    # --- 4. DETALLE POR MÉTODO (Para el cuadrito de abajo) ---
-    efectivo = pagos_mes.filter(metodo='EFECTIVO').aggregate(Sum('monto'))['monto__sum'] or 0
-    transferencia = pagos_mes.filter(metodo='TRANSFERENCIA').aggregate(Sum('monto'))['monto__sum'] or 0
-    otros = pagos_mes.exclude(metodo__in=['EFECTIVO', 'TRANSFERENCIA']).aggregate(Sum('monto'))['monto__sum'] or 0
-
-    # --- 5. LÓGICA DE MOROSOS (Se mantiene igual) ---
     perfiles_deudores = Perfil.objects.filter(clases_disponibles__lt=0).select_related('usuario')
     morosos = []
     for p in perfiles_deudores:
@@ -69,12 +66,6 @@ def reporte_ganancias(request):
         morosos.append(u)
 
     contexto = {
-        'total_mensual': total_mensual,      
-        'total_historico': total_historico,  
-        'efectivo': efectivo,
-        'transferencia': transferencia,
-        'otros': otros,
-        'cantidad_pagos': pagos_mes.count(),
         'mes_nombre': ahora.strftime('%B %Y'),
         'morosos': morosos,
         'cantidad_morosos': len(morosos),
@@ -96,7 +87,7 @@ def inscribir_clase(request, clase_id):
                 # ese último lugar mientras este código se ejecuta (Punto 4)
                 clase = Clase.objects.select_for_update().get(id=clase_id)
                 perfil, created = Perfil.objects.get_or_create(usuario=request.user)
-                perfil.limpiar_vencidos
+                perfil.limpiar_vencidos()
 
                 # 2. VALIDACIÓN: Evitar duplicados
                 if Inscripcion.objects.filter(usuario=request.user, clase=clase).exists():
@@ -202,3 +193,178 @@ def marcar_asistencia(request, inscripcion_id):
     return redirect('admin_clases') 
 
 
+
+
+def gestion_usuarios_recepcion(request):
+    query = request.GET.get('q')
+    usuarios_list = User.objects.select_related('perfil').all().order_by('-id')
+
+    if query:
+        usuarios_list = usuarios_list.filter(
+            Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(email__icontains=query)
+        )
+
+    paginator = Paginator(usuarios_list, 20) # Mostramos de a 20
+    page_number = request.GET.get('page')
+    usuarios = paginator.get_page(page_number)
+    
+    return render(request, 'recepcion/lista_usuarios.html', {'usuarios': usuarios})
+
+@staff_member_required
+@transaction.atomic
+def actualizar_cupos_pago(request, usuario_id):
+    if request.method == 'POST':
+        usuario = get_object_or_404(User, id=usuario_id)
+        
+        # Obtenemos los datos del formulario del Modal
+        cantidad = int(request.POST.get('cupos_sumar', 0))
+        monto_pagado = float(request.POST.get('monto', 0) or 0)
+        metodo = request.POST.get('metodo', 'EFECTIVO') # Podés agregar un select en el HTML
+
+        if cantidad > 0:
+            
+            nuevo_pago = Pago.objects.create(
+                usuario=usuario,
+                monto=monto_pagado,
+                cantidad_clases=cantidad,
+                metodo=metodo
+            )
+            
+            
+            messages.success(request, f"✅ Pago registrado. {usuario.first_name} ahora tiene {usuario.perfil.clases_disponibles} clases.")
+        else:
+            messages.warning(request, "⚠️ No se ingresó una cantidad de clases válida.")
+            
+        return redirect('recepcion')
+    
+@staff_member_required
+@transaction.atomic
+def registrar_movimiento(request):
+    if request.method == 'POST':
+        tipo = request.POST.get('tipo') # Recibe 'INGRESO' o 'EGRESO'
+        monto = request.POST.get('monto')
+        concepto = request.POST.get('concepto')
+        metodo = request.POST.get('metodo')
+
+        if monto and concepto:
+            MovimientoCaja.objects.create(
+                tipo=tipo,
+                monto=float(monto),
+                concepto=concepto,
+                metodo=metodo
+            )
+            messages.success(request, f"✅ {tipo.capitalize()} registrado correctamente.")
+        else:
+            messages.error(request, "⚠️ Faltan datos obligatorios.")
+            
+    return redirect('caja_diaria') # Te devuelve a la planilla de caja
+    
+
+@staff_member_required
+def caja_diaria(request):
+    fecha_str = request.GET.get('fecha')
+    if fecha_str:
+        fecha_filtro = timezone.datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    else:
+        fecha_filtro = timezone.now().date()
+
+    # 1. Movimientos de Dinero (Ingresos y Egresos)
+    movimientos = MovimientoCaja.objects.filter(fecha__date=fecha_filtro).order_by('fecha')
+    ingresos = movimientos.filter(tipo='INGRESO')
+    egresos = movimientos.filter(tipo='EGRESO')
+
+    
+    # 3. Totales
+    total_ingresos = ingresos.aggregate(Sum('monto'))['monto__sum'] or 0
+    total_egresos = egresos.aggregate(Sum('monto'))['monto__sum'] or 0
+    saldo_neto = total_ingresos - total_egresos
+    efectivo_dia = movimientos.filter(metodo='EFECTIVO', tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    transf_dia = movimientos.filter(metodo='TRANSFERENCIA', tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    tarjeta_dia = movimientos.filter(metodo='TARJETA', tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    efectivo_dia_salida = movimientos.filter(metodo='EFECTIVO', tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    transf_dia_salida = movimientos.filter(metodo='TRANSFERENCIA', tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    tarjeta_dia_salida = movimientos.filter(metodo='TARJETA', tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    inicio_mes = fecha_filtro.replace(day=1)
+    total_mensual = MovimientoCaja.objects.filter(
+        tipo='INGRESO', 
+        fecha__date__gte=inicio_mes, 
+        fecha__date__lte=fecha_filtro
+    ).aggregate(Sum('monto'))['monto__sum'] or 0
+
+    total_egresos_mes = MovimientoCaja.objects.filter(
+    tipo='EGRESO', 
+    fecha__date__gte=inicio_mes, 
+    fecha__date__lte=fecha_filtro
+    ).aggregate(Sum('monto'))['monto__sum'] or 0
+
+    context = {
+        'ingresos': ingresos,
+        'egresos': egresos,
+        'total_ingresos': total_ingresos,
+        'total_egresos': total_egresos,
+        'saldo_neto': saldo_neto,
+        'fecha_filtro': fecha_filtro,
+        'efectivo_dia': efectivo_dia-efectivo_dia_salida,
+        'transf_dia': transf_dia-transf_dia_salida,
+        'tarjeta_dia': tarjeta_dia-tarjeta_dia_salida,
+        'mensual_dia': total_mensual-total_egresos_mes,
+    }
+    return render(request, 'recepcion/caja_diaria.html', context)
+
+import random
+from django.contrib.auth.models import User
+from .models import Perfil, Producto, MovimientoCaja, Pago # Ajustá los imports a tus apps
+from django.utils import timezone
+from datetime import timedelta
+
+@staff_member_required
+def generar_data_masiva(request):
+    cantidad = 500  # Probamos con 500 por cada click
+    usuarios_a_crear = []
+    
+    for i in range(cantidad):
+        id_unico = random.randint(10000, 999999)
+        usuarios_a_crear.append(User(
+            username=f"socio_{id_unico}",
+            first_name=f"SocioTest",
+            last_name=f"Numero_{id_unico}",
+            email=f"test_{id_unico}@gym.com"
+        ))
+    
+    # Creamos los usuarios masivamente
+    User.objects.bulk_create(usuarios_a_crear)
+    
+    # IMPORTANTE: Como bulk_create no dispara "signals", 
+    # tenemos que crear los Perfiles manualmente para esos nuevos usuarios
+    usuarios_sin_perfil = User.objects.filter(perfil__isnull=True)
+    perfiles_a_crear = [
+        Perfil(usuario=u, clases_disponibles=random.randint(0, 12), telefono="12345678") 
+        for u in usuarios_sin_perfil
+    ]
+    Perfil.objects.bulk_create(perfiles_a_crear)
+
+    messages.success(request, f"🚀 Se cargaron {cantidad} usuarios en tiempo récord.")
+    return redirect('recepcion')
+
+@staff_member_required
+@user_passes_test(es_admin) # Solo el superusuario puede resetear la DB
+def reset_base_datos(request):
+    try:
+        with transaction.atomic():
+            # Borramos todos los usuarios que NO sean staff/superuarios
+            usuarios_test = User.objects.filter(is_staff=False, is_superuser=False)
+            cantidad_usuarios = usuarios_test.count()
+            usuarios_test.delete()
+            
+            # Borramos movimientos de caja y productos
+            MovimientoCaja.objects.all().delete()
+            Producto.objects.all().delete()
+            # Si tenés el modelo Pago, se borra en cascada al borrar el User, 
+            # pero por las dudas:
+            if 'Pago' in globals(): Pago.objects.all().delete()
+
+        messages.success(request, f"💣 Sistema reseteado: Se eliminaron {cantidad_usuarios} usuarios y toda la data de prueba.")
+    except Exception as e:
+        messages.error(request, f"❌ Error al resetear: {str(e)}")
+        
+    return redirect('caja_diaria')

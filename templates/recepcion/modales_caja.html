@@ -1,0 +1,33 @@
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="{% url 'registrar_movimiento' %}" class="modal-content bg-dark border-{{ color }}">
+            {% csrf_token %}
+            <input type="hidden" name="tipo" value="{{ tipo }}">
+            <div class="modal-header border-{{ color }}">
+                <h5 class="modal-title text-{{ color }}">{{ tipo }} DE DINERO</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-white">
+                <div class="mb-3">
+                    <label class="form-label">Monto ($)</label>
+                    <input type="number" name="monto" class="form-control" step="0.01" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Concepto / Descripción</label>
+                    <input type="text" name="concepto" class="form-control" placeholder="Ej: Venta Proteína o Pago Luz" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white">Método</label>
+                    <select name="metodo" class="form-control">
+                        <option value="EFECTIVO">Efectivo 💵</option>
+                        <option value="TRANSFERENCIA">Transferencia 📱</option>
+                        <option value="TARJETA">Tarjeta 💳</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-{{ color }}">
+                <button type="submit" class="btn btn-{{ color }} fw-bold">GUARDAR {{ tipo }}</button>
+            </div>
+        </form>
+    </div>
+</div>
