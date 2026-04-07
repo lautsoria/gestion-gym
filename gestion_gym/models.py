@@ -30,33 +30,30 @@ class Pago(models.Model):
     
     
     def save(self, *args, **kwargs):
-        es_nuevo = self.pk is None # Verificamos si apenas se está creando
-        super().save(*args, **kwargs) # Guardamos el pago primero
+        es_nuevo = self.pk is None 
+        super().save(*args, **kwargs) 
         
         if es_nuevo:
             perfil, created = Perfil.objects.get_or_create(usuario=self.usuario)
             hoy = timezone.now().date()
 
-            # --- MEJORA PROFESIONAL ---
-            # Si el socio ya tiene cupos pero su vencimiento es lejano, 
-            # quizás deberías sumarlos en lugar de borrarlos.
-            # Pero si tu regla es "Se pierde lo anterior", tu IF actual está perfecto.
-
+            # Lógica de cupos
             if perfil.clases_disponibles > 0:
-                # Aquí es donde se pierden los cupos viejos al entrar el pago nuevo
                 perfil.clases_disponibles = self.cantidad_clases
             else:
-                # Si debía (-2) y compra 10, queda con 8.
                 perfil.clases_disponibles += self.cantidad_clases
             
             perfil.fecha_vencimiento = hoy + timedelta(days=30)
             perfil.save()
+
+            # CREACIÓN DEL MOVIMIENTO CORREGIDA
             MovimientoCaja.objects.create(
                 tipo='INGRESO',
                 monto=self.monto,
                 concepto=f"Pago Cuota: {self.usuario.get_full_name() or self.usuario.username}",
-                categoria='CUOTAS',
+                metodo=self.metodo,  # Pasamos el método (Efectivo/Transf/etc)
                 usuario_afectado=self.usuario
+                # Borramos 'categoria' porque no existe en tu modelo MovimientoCaja
             )
             
 

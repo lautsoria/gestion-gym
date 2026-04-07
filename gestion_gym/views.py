@@ -270,24 +270,22 @@ def actualizar_cupos_pago(request, usuario_id):
     if request.method == 'POST':
         usuario = get_object_or_404(User, id=usuario_id)
         
-        # Obtenemos los datos del formulario del Modal
         cantidad = int(request.POST.get('cupos_sumar', 0))
         monto_pagado = float(request.POST.get('monto', 0) or 0)
-        metodo = request.POST.get('metodo', 'EFECTIVO') # Podés agregar un select en el HTML
+        metodo = request.POST.get('metodo', 'EFECTIVO')
 
         if cantidad > 0:
-            
-            nuevo_pago = Pago.objects.create(
+            # Al crear el Pago, el método save() del modelo
+            # hará TODO el trabajo (Caja + Cupos + Vencimiento)
+            Pago.objects.create(
                 usuario=usuario,
                 monto=monto_pagado,
                 cantidad_clases=cantidad,
                 metodo=metodo
             )
-            
-            
-            messages.success(request, f"✅ Pago registrado. {usuario.first_name} ahora tiene {usuario.perfil.clases_disponibles} clases.")
+            messages.success(request, f"✅ Pago registrado correctamente para {usuario.first_name}.")
         else:
-            messages.warning(request, "⚠️ No se ingresó una cantidad de clases válida.")
+            messages.warning(request, "⚠️ La cantidad debe ser mayor a 0.")
             
         return redirect('recepcion')
     
