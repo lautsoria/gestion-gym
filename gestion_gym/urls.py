@@ -20,6 +20,12 @@ urlpatterns = [
     path('marcar-asistencia/<int:inscripcion_id>/', views.marcar_asistencia, name='marcar_asistencia'),
     path('recepcion/caja/registrar/', views.registrar_movimiento, name='registrar_movimiento'),
     path('recepcion/caja/', views.caja_diaria, name='contaduria'),
+    path('actualizar-cupos-manual/', views.actualizar_cupos_pago_manual, name='actualizar_cupos_pago_manual'),
+    path('sumar-cupo-rapido/<int:usuario_id>/', views.sumar_cupo_rapido, name='sumar_cupo_rapido'),
+    path('clases/nueva/', views.crear_clase_rapida, name='crear_clase_rapida'),
+    
+    path('clases/editar/<int:clase_id>/', views.editar_clase_rapida, name='editar_clase_rapida'),
+    path('clases/eliminar/<int:clase_id>/', views.eliminar_clase_rapida, name='eliminar_clase_rapida'),
     path('sys-admin/populate-massive-data/', views.generar_data_masiva, name='bulk_test'),
     path('sys-admin/factory-reset-danger/', views.reset_base_datos, name='reset_db'),
     path('sistema/generar-seeding-test-99/', views.generar_data_test, name='test_data'),

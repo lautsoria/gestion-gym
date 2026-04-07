@@ -1,49 +1,100 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="text-center mb-5">
+<div class="container mt-4">
     
-    <div class="row mt-5">
-    <div class="col-12">
-        <div class="card p-4 border-danger">
-            <h4 class="text-danger mb-4"><i class="bi bi-exclamation-triangle"></i> Usuarios con Cuota Pendiente ({{ cantidad_morosos }})</h4>
-            
-            {% if morosos %}
-            <div class="table-responsive">
-                <table class="table table-dark table-striped">
-                    <thead>
-                        <tr>
-                            <th>Nombre Completo</th>
-                            <th>Email</th>
-                            <th>Último Pago Registrado</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for m in morosos %}
-                        <tr>
-                            <td>{{ m.first_name }} {{ m.last_name }} ({{ m.username }})</td>
-                            <td>{{ m.email }}</td>
-                            <td>
-                                {% if m.ultimo %}
-                                    {{ m.ultimo.fecha_pago|date:"d/m/Y" }} (${{ m.ultimo.monto }})
-                                {% else %}
-                                    <span class="text-muted">Sin registros</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <a href="/admin/gestion_gym/pago/add/?usuario={{ m.id }}" class="btn btn-sm btn-outline-success">Cargar Pago</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <div class="row align-items-center mb-4">
+        <div class="col-md-6">
+            <h2 style="color: var(--violet-main); font-weight: bold;">GESTIÓN DE CLASES</h2>
+        </div>
+        <div class="col-md-6 text-end d-flex justify-content-end">
+            <form method="GET" class="d-flex me-2">
+                <input type="date" name="fecha" class="form-control form-control-sm me-2 bg-dark text-white border-violet" 
+                       value="{{ fecha_filtro|date:'Y-m-d' }}">
+                <button type="submit" class="btn btn-sm btn-violet">VER DIA</button>
+            </form>
+                <a href="{% url 'crear_clase_rapida' %}" class="btn btn-sm btn-success fw-bold">+ CREAR CLASE</a>
+        </div>
+    </div>
+
+    <div class="row mb-5">
+        <h5 class="text-white border-bottom border-secondary pb-2 mb-3">
+            Clases del {{ fecha_filtro|date:"d \d\e F" }}
+        </h5>
+        {% for c in clases %}
+        <div class="col-md-4 mb-3">
+            <div class="card bg-dark border-violet shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h5 class="text-white fw-bold">{{ c.nombre_actividad }}</h5>
+                        <span class="badge bg-violet">{{ c.horario|date:"H:i" }}hs</span>
+                    </div>
+                    <p class="text-muted small mb-3">👨‍🏫 Prof: {{ c.instructor }}</p>
+                    
+                    <div class="d-flex justify-content-between align-items-center border-top border-secondary pt-3">
+                        <span class="text-info small">Capacidad: {{ c.capacidad_maxima }}</span>
+                        <div class="btn-group">
+                            <a href="{% url 'editar_clase_rapida' c.id %}" class="btn btn-xs btn-outline-light">EDITAR</a>
+                            <a href="{% url 'asistencia' c.id %}"  class="btn btn-xs btn-violet">ALUMNOS</a>
+                        </div>
+                    </div>
+                </div>
             </div>
-            {% else %}
-                <p class="text-success text-center">¡Increíble! Todos los socios están al día.</p>
-            {% endif %}
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-4 bg-dark rounded border border-secondary">
+            <p class="text-muted mb-0">No hay clases programadas para esta fecha.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card p-4 border-danger bg-dark shadow-lg">
+        <h4 class="text-danger mb-4 fw-bold">
+            <i class="bi bi-exclamation-triangle"></i> SOCIOS CON CUOTA PENDIENTE ({{ cantidad_morosos }})
+        </h4>
+        
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle">
+                <thead>
+                    <tr class="text-muted small">
+                        <th>Socio</th>
+                        <th class="text-center">Cupos</th>
+                        <th class="text-center">Ajuste Directo</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in morosos %}
+                    <tr>
+                        <td>
+                            <span class="fw-bold">{{ m.first_name }} {{ m.last_name }}</span><br>
+                            <small class="text-muted">@{{ m.username }} - {{ m.perfil.telefono|default:"S/T" }}</small>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-danger fs-6">{{ m.perfil.clases_disponibles }}</span>
+                        </td>
+                        <td class="text-center">
+                            <form method="POST" action="{% url 'actualizar_cupos_pago_manual' %}" class="d-flex justify-content-center align-items-center">
+                                {% csrf_token %}
+                                <input type="hidden" name="usuario_id" value="{{ m.id }}">
+                                <input type="number" name="nuevos_cupos" value="{{ m.perfil.clases_disponibles }}" 
+                                       class="form-control form-control-sm bg-dark text-white text-center mx-1 border-secondary" 
+                                       style="width: 55px;">
+                                <button type="submit" name="accion" value="set" class="btn btn-xs btn-violet ms-2">OK</button>
+                            </form>
+                        </td>
+                        
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-</div>
+
+<style>
+    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+    .border-violet { border-color: var(--violet-main) !important; }
+    .bg-violet { background-color: var(--violet-main); }
+</style>
 {% endblock %}

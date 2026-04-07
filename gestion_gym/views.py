@@ -17,7 +17,7 @@ from django.db import transaction,models
 from django.db.models import Q
 from .models import Clase, Inscripcion, Perfil,MovimientoCaja
 from django.core.paginator import Paginator
-
+from .forms import ClaseForm
 
 class RegistroUsuario(generic.CreateView):
     form_class = RegistroCompletoForm 
@@ -56,23 +56,77 @@ def ver_horarios(request):
 
 @staff_member_required
 def reporte_ganancias(request):
-    ahora = timezone.now()
-    perfiles_deudores = Perfil.objects.filter(clases_disponibles__lt=0).select_related('usuario')
-    morosos = []
-    for p in perfiles_deudores:
-        u = p.usuario
-        u.clases_deuda = abs(p.clases_disponibles)
-        u.ultimo = Pago.objects.filter(usuario=u).order_by('-fecha_pago').first()
-        morosos.append(u)
+    from django.utils import timezone
+    import datetime
 
-    contexto = {
-        'mes_nombre': ahora.strftime('%B %Y'),
+    # 1. Filtro de Fecha (Por defecto hoy)
+    fecha_str = request.GET.get('fecha')
+    if fecha_str:
+        fecha_filtro = datetime.datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    else:
+        fecha_filtro = timezone.now().date()
+
+    # 2. Traer Clases de ese día específico
+    clases = Clase.objects.filter(
+        horario__date=fecha_filtro
+    ).order_by('horario')
+
+    # 3. Traer Morosos (Socios con 0 o menos cupos)
+    morosos = User.objects.filter(
+        perfil__clases_disponibles__lte=0, 
+        is_staff=False
+    ).select_related('perfil').order_by('first_name')
+
+    context = {
+        'clases': clases,
         'morosos': morosos,
-        'cantidad_morosos': len(morosos),
+        'fecha_filtro': fecha_filtro,
+        'cantidad_morosos': morosos.count(),
     }
-    return render(request, 'gestion_gym/reporte.html', contexto)
+    return render(request, 'gestion_gym/reporte.html', context)
 
 
+
+@staff_member_required
+def crear_clase_rapida(request):
+    if request.method == 'POST':
+        form = ClaseForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "✅ Clase creada correctamente.")
+            return redirect('reporte_ganancias')
+    else:
+        # Pre-cargar la fecha si viene por URL (opcional)
+        fecha_inicial = request.GET.get('fecha', None)
+        form = ClaseForm()
+        
+    return render(request, 'recepcion/crear_clase.html', {'form': form})
+
+@staff_member_required
+def editar_clase_rapida(request, clase_id):
+    clase = get_object_or_404(Clase, id=clase_id)
+    
+    if request.method == 'POST':
+        # Pasamos instance=clase para que Django sepa que es una edición y no una creación
+        form = ClaseForm(request.POST, instance=clase)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"✅ Clase '{clase.nombre_actividad}' actualizada.")
+            return redirect('reporte_ganancias')
+    else:
+        # Cargamos el formulario con los datos actuales de la clase
+        form = ClaseForm(instance=clase)
+        
+    return render(request, 'recepcion/editar_clase.html', {'form': form, 'clase': clase})
+
+@staff_member_required
+def eliminar_clase_rapida(request, clase_id):
+    clase = get_object_or_404(Clase, id=clase_id)
+    if request.method == 'POST':
+        nombre = clase.nombre_actividad
+        clase.delete()
+        messages.warning(request, f"🗑️ Clase '{nombre}' eliminada.")
+    return redirect('reporte_ganancias')
 
 
 
@@ -311,6 +365,25 @@ def caja_diaria(request):
     }
     return render(request, 'recepcion/caja_diaria.html', context)
 
+@staff_member_required
+def actualizar_cupos_pago_manual(request):
+    if request.method == 'POST':
+        usuario_id = request.POST.get('usuario_id')
+        nuevos_cupos = request.POST.get('nuevos_cupos')
+        perfil = get_object_or_404(Perfil, usuario_id=usuario_id)
+        perfil.clases_disponibles = nuevos_cupos
+        perfil.save()
+        messages.success(request, f"Cupos de {perfil.usuario.first_name} actualizados a {nuevos_cupos}.")
+    return redirect('reporte_ganancias')
+
+@staff_member_required
+def sumar_cupo_rapido(request, usuario_id):
+    if request.method == 'POST':
+        perfil = get_object_or_404(Perfil, usuario_id=usuario_id)
+        perfil.clases_disponibles += 1
+        perfil.save()
+        return JsonResponse({'status': 'ok'})
+
 import random
 from django.contrib.auth.models import User
 from .models import Perfil, MovimientoCaja, Pago # Ajustá los imports a tus apps
@@ -346,6 +419,8 @@ def generar_data_masiva(request):
 
     messages.success(request, f"🚀 Se cargaron {cantidad} usuarios en tiempo récord.")
     return redirect('recepcion')
+
+
 
 
 @staff_member_required

@@ -36,7 +36,7 @@ class InscripcionAdmin(admin.ModelAdmin):
 
 @admin.register(Perfil)
 class PerfilAdmin(admin.ModelAdmin):
-    list_display = ('usuario', 'clases_disponibles', 'fecha_vencimiento')
+    list_display = ('usuario', 'clases_disponibles', 'fecha_vencimiento', 'telefono')
     list_editable = ('clases_disponibles', 'fecha_vencimiento')
     
 class UserGymAdmin(BaseUserAdmin):

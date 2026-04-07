@@ -51,22 +51,7 @@
             outline: none;
             box-shadow: 0 0 5px var(--violet-main);
         }
-        /* Corrección de Modales Bugueados */
-        .modal-backdrop {
-            z-index: 1040 !important;
-        }
-        .modal {
-            z-index: 1050 !important;
-            background: rgba(0, 0, 0, 0.5); /* Oscurece el fondo manualmente si falla el backdrop */
-        }
-
-        /* Evita que el modal se vea transparente sobre el fondo oscuro */
-        .modal-content {
-            background-color: var(--card-dark) !important;
-            border: 1px solid var(--violet-main) !important;
-            opacity: 1 !important;
-            box-shadow: 0 0 20px rgba(138, 43, 226, 0.3);
-        }
+       
     </style>
 </head>
 <body>

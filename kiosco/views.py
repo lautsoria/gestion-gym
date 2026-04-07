@@ -1,9 +1,15 @@
-from django.shortcuts import render
+from django.shortcuts import render,redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import Producto, Venta, DetalleVenta
 from django.http import JsonResponse
 from django.db import transaction # <--- IMPORTANTE PARA LA SEGURIDAD
 import json
+from .forms import ProductoForm
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from .models import Producto
+from .forms import ProductoForm
+
 
 @staff_member_required
 def terminal_ventas(request):
@@ -83,3 +89,69 @@ def procesar_venta(request):
             return JsonResponse({'status': 'error', 'message': 'Error inesperado al procesar la venta.'}, status=500)
             
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+
+
+
+@staff_member_required
+def crear_producto_kiosco(request):
+    if request.method == 'POST':
+        form = ProductoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "✅ Producto agregado al inventario.")
+            return redirect('kiosco') # Cambia 'kiosco' por el nombre de tu url del listado
+    else:
+        form = ProductoForm()
+    
+    return render(request, 'kiosco/crear_producto.html', {'form': form})
+
+@staff_member_required
+def ajustar_stock(request, producto_id):
+    if request.method == 'POST':
+        producto = get_object_or_404(Producto, id=producto_id)
+        accion = request.POST.get('accion')
+        cantidad = int(request.POST.get('cantidad', 1))
+
+        if accion == 'sumar':
+            producto.stock += cantidad
+        elif accion == 'restar':
+            if producto.stock >= cantidad:
+                producto.stock -= cantidad
+            else:
+                messages.error(request, f"No hay suficiente stock de {producto.nombre}")
+                return redirect('kiosco')
+        
+        producto.save()
+        messages.success(request, f"Stock de {producto.nombre} actualizado.")
+    return redirect('kiosco')
+
+
+@staff_member_required
+def editar_producto(request, producto_id):
+    producto = get_object_or_404(Producto, id=producto_id)
+    
+    if request.method == 'POST':
+        # Al pasar instance=producto, Django actualiza el objeto existente 
+        # en lugar de crear uno nuevo
+        form = ProductoForm(request.POST, instance=producto)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"✅ {producto.nombre} actualizado correctamente.")
+            return redirect('kiosco')
+    else:
+        form = ProductoForm(instance=producto)
+    
+    return render(request, 'kiosco/crear_producto.html', {
+        'form': form, 
+        'editando': True, 
+        'producto': producto
+    })
+
+@staff_member_required
+def eliminar_producto(request, producto_id):
+    producto = get_object_or_404(Producto, id=producto_id)
+    if request.method == 'POST':
+        nombre = producto.nombre
+        producto.delete()
+        messages.warning(request, f"🗑️ {nombre} ha sido eliminado del sistema.")
+    return redirect('kiosco')
