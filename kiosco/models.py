@@ -31,7 +31,7 @@ class Venta(models.Model):
                 tipo='INGRESO',
                 monto=self.total,
                 concepto=f"Venta Kiosco #{self.id}",
-                metodo=self.metodo, # <-- USAMOS EL MÉTODO DE LA VENTA
+                metodo=self.metodo, 
                 usuario_afectado=self.vendedor
             )
     def __str__(self):

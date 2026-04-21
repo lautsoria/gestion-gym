@@ -1,15 +1,61 @@
 from django.shortcuts import render,redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
+
+from gestion_gym.models import MovimientoCaja
 from .models import Producto, Venta, DetalleVenta
 from django.http import JsonResponse
-from django.db import transaction # <--- IMPORTANTE PARA LA SEGURIDAD
+from django.db import transaction 
 import json
 from .forms import ProductoForm
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from .models import Producto
 from .forms import ProductoForm
+import openpyxl
+from django.http import HttpResponse
 
+
+
+
+def exportar_ventas_excel(request):
+    fecha_inicio = request.GET.get('inicio') 
+    fecha_fin = request.GET.get('fin')       
+
+    # 1. Filtramos los detalles de venta
+    # Usamos select_related para traer el producto y la venta de una sola vez
+    detalles = DetalleVenta.objects.select_related('venta', 'producto').all()
+    
+    if fecha_inicio:
+        detalles = detalles.filter(venta__fecha__date__gte=fecha_inicio)
+    if fecha_fin:
+        detalles = detalles.filter(venta__fecha__date__lte=fecha_fin)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Detalle Ventas"
+
+    # 2. Definir encabezados (ahora sí tenemos los datos)
+    columnas = ['Fecha Venta', 'Producto', 'Cantidad', 'Precio Unitario', 'Subtotal', 'Vendedor']
+    ws.append(columnas)
+
+    # 3. Llenar los datos
+    for det in detalles:
+        ws.append([
+            det.venta.fecha.strftime('%d/%m/%Y %H:%M'),
+            det.producto.nombre,
+            det.cantidad,
+            float(det.precio_unitario),
+            float(det.cantidad * det.precio_unitario),
+            det.venta.vendedor.username
+        ])
+
+    # 4. Preparar respuesta HTTP
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="detalle_ventas_kiosco.xlsx"'
+    wb.save(response)
+    return response
 
 @staff_member_required
 def terminal_ventas(request):

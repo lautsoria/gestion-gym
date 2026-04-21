@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.db.models import Sum
+from django.db.models import Sum, Case, When, DecimalField, Value
 from .models import Pago
 from django.utils import timezone
 from django.contrib.auth.decorators import user_passes_test
@@ -18,6 +18,9 @@ from django.db.models import Q
 from .models import Clase, Inscripcion, Perfil,MovimientoCaja
 from django.core.paginator import Paginator
 from .forms import ClaseForm
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from decimal import Decimal
 
 class RegistroUsuario(generic.CreateView):
     form_class = RegistroCompletoForm 
@@ -69,7 +72,7 @@ def reporte_ganancias(request):
     # 2. Traer Clases de ese día específico
     clases = Clase.objects.filter(
         horario__date=fecha_filtro
-    ).order_by('horario')
+    ).prefetch_related('inscripcion_set').order_by('horario')
 
     # 3. Traer Morosos (Socios con 0 o menos cupos)
     morosos = User.objects.filter(
@@ -88,90 +91,78 @@ def reporte_ganancias(request):
 
 
 @staff_member_required
+@require_POST
 def crear_clase_rapida(request):
-    if request.method == 'POST':
-        form = ClaseForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "✅ Clase creada correctamente.")
-            return redirect('reporte_ganancias')
+    form = ClaseForm(request.POST)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "✅ Clase creada correctamente.")
     else:
-        # Pre-cargar la fecha si viene por URL (opcional)
-        fecha_inicial = request.GET.get('fecha', None)
-        form = ClaseForm()
-        
-    return render(request, 'recepcion/crear_clase.html', {'form': form})
+        messages.error(request, "⚠️ Error al crear la clase. Verifica los datos.")
+    return redirect('reporte_ganancias')
 
 @staff_member_required
+@require_POST
 def editar_clase_rapida(request, clase_id):
     clase = get_object_or_404(Clase, id=clase_id)
-    
-    if request.method == 'POST':
-        # Pasamos instance=clase para que Django sepa que es una edición y no una creación
-        form = ClaseForm(request.POST, instance=clase)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"✅ Clase '{clase.nombre_actividad}' actualizada.")
-            return redirect('reporte_ganancias')
+    form = ClaseForm(request.POST, instance=clase)
+    if form.is_valid():
+        form.save()
+        messages.success(request, f"✅ Clase '{clase.nombre_actividad}' actualizada.")
     else:
-        # Cargamos el formulario con los datos actuales de la clase
-        form = ClaseForm(instance=clase)
-        
-    return render(request, 'recepcion/editar_clase.html', {'form': form, 'clase': clase})
+        messages.error(request, "⚠️ Error al editar la clase. Verifica los datos.")
+    return redirect('reporte_ganancias')
 
 @staff_member_required
+@require_POST
 def eliminar_clase_rapida(request, clase_id):
     clase = get_object_or_404(Clase, id=clase_id)
-    if request.method == 'POST':
-        nombre = clase.nombre_actividad
-        clase.delete()
-        messages.warning(request, f"🗑️ Clase '{nombre}' eliminada.")
+    nombre = clase.nombre_actividad
+    clase.delete()
+    messages.warning(request, f"🗑️ Clase '{nombre}' eliminada.")
     return redirect('reporte_ganancias')
 
 
 
 
 @login_required
+@require_POST
 def inscribir_clase(request, clase_id):
     # 1. SEGURIDAD: Solo permitimos inscripciones vía POST
-    if request.method == 'POST':
-        try:
-            with transaction.atomic():
-                # select_for_update() bloquea la fila para que nadie más reserve 
-                # ese último lugar mientras este código se ejecuta (Punto 4)
-                clase = Clase.objects.select_for_update().get(id=clase_id)
-                perfil, created = Perfil.objects.get_or_create(usuario=request.user)
-                perfil.limpiar_vencidos()
+    try:
+        with transaction.atomic():
+            # select_for_update() bloquea la fila para que nadie más reserve 
+            # ese último lugar mientras este código se ejecuta (Punto 4)
+            clase = Clase.objects.select_for_update().get(id=clase_id)
+            perfil, created = Perfil.objects.get_or_create(usuario=request.user)
+            perfil.limpiar_vencidos()
 
-                # 2. VALIDACIÓN: Evitar duplicados
-                if Inscripcion.objects.filter(usuario=request.user, clase=clase).exists():
-                    messages.warning(request, "Ya estás anotado en esta clase.")
-                    return redirect('horarios')
+            # 2. VALIDACIÓN: Evitar duplicados
+            if Inscripcion.objects.filter(usuario=request.user, clase=clase).exists():
+                messages.warning(request, "Ya estás anotado en esta clase.")
+                return redirect('horarios')
 
-                # 3. VALIDACIÓN: Cupos físicos (esto sí es estricto)
-                if clase.capacidad_maxima <= 0:
-                    messages.error(request, "¡Lo sentimos! Esta clase ya no tiene cupos disponibles.")
-                    return redirect('horarios')
+            # 3. VALIDACIÓN: Cupos físicos (esto sí es estricto)
+            if clase.capacidad_maxima <= 0:
+                messages.error(request, "¡Lo sentimos! Esta clase ya no tiene cupos disponibles.")
+                return redirect('horarios')
 
-                # 4. LÓGICA DE NEGOCIO: Descontamos crédito y cupo
-                # (Permitimos que clases_disponibles sea menor a 0)
-                clase.capacidad_maxima -= 1
-                clase.save()
+            # 4. LÓGICA DE NEGOCIO: Descontamos crédito y cupo
+            # (Permitimos que clases_disponibles sea menor a 0)
+            clase.capacidad_maxima -= 1
+            clase.save()
 
-                perfil.clases_disponibles -= 1
-                perfil.save()
+            perfil.clases_disponibles -= 1
+            perfil.save()
 
-                Inscripcion.objects.create(usuario=request.user, clase=clase)
-                
-                messages.success(request, f"✅ Reserva confirmada para {clase.nombre_actividad}.")
-                
-        except Exception as e:
-            messages.error(request, "Error al procesar la reserva.")
+            Inscripcion.objects.create(usuario=request.user, clase=clase)
             
-        return redirect('mis_clases')
-    
-    # Si intentan entrar por GET (URL), los mandamos a horarios
-    return redirect('horarios')
+            messages.success(request, f"✅ Reserva confirmada para {clase.nombre_actividad}.")
+            
+    except Exception as e:
+        messages.error(request, "Error al procesar la reserva.")
+        
+    return redirect('mis_clases')
 
 
 
@@ -187,35 +178,32 @@ def mis_clases(request):
     return render(request, 'gestion_gym/mis_clases.html', {'reservas': mis_reservas})
 
 @login_required
+@require_POST
 def cancelar_reserva(request, inscripcion_id):
     # 1. SEGURIDAD: Solo permitimos cancelar mediante una petición POST (desde el formulario)
-    if request.method == 'POST':
-        # Buscamos la reserva asegurándonos de que pertenezca al usuario logueado
-        reserva = get_object_or_404(Inscripcion, id=inscripcion_id, usuario=request.user)
-        
-        try:
-            # 2. TRANSACCIÓN: Se hace todo o no se hace nada
-            with transaction.atomic():
-                # Devolvemos el cupo a la clase
-                clase = reserva.clase
-                clase.capacidad_maxima += 1
-                clase.save()
-                
-                # Devolvemos el crédito al perfil del usuario
-                perfil = request.user.perfil
-                perfil.clases_disponibles += 1
-                perfil.save()
-                
-                # Borramos la inscripción definitivamente
-                reserva.delete()
-                
-                messages.success(request, f"✅ Cancelación exitosa. Se te devolvió 1 crédito para {clase.nombre_actividad}.")
-        except Exception as e:
-            messages.error(request, "❌ Hubo un error al procesar la cancelación. Inténtalo de nuevo.")
-            
-        return redirect('mis_clases')
+    # Buscamos la reserva asegurándonos de que pertenezca al usuario logueado
+    reserva = get_object_or_404(Inscripcion, id=inscripcion_id, usuario=request.user)
     
-    # Si alguien intenta entrar por URL (GET), lo mandamos de vuelta sin hacer nada
+    try:
+        # 2. TRANSACCIÓN: Se hace todo o no se hace nada
+        with transaction.atomic():
+            # Devolvemos el cupo a la clase
+            clase = reserva.clase
+            clase.capacidad_maxima += 1
+            clase.save()
+            
+            # Devolvemos el crédito al perfil del usuario
+            perfil = request.user.perfil
+            perfil.clases_disponibles += 1
+            perfil.save()
+            
+            # Borramos la inscripción definitivamente
+            reserva.delete()
+            
+            messages.success(request, f"✅ Cancelación exitosa. Se te devolvió 1 crédito para {clase.nombre_actividad}.")
+    except Exception as e:
+        messages.error(request, "❌ Hubo un error al procesar la cancelación. Inténtalo de nuevo.")
+        
     return redirect('mis_clases')
 
 
@@ -238,13 +226,12 @@ def detalle_asistencia(request, clase_id):
 
 
 @staff_member_required
+@require_POST
 def marcar_asistencia(request, inscripcion_id):
-    if request.method == 'POST': 
-        inscripcion = get_object_or_404(Inscripcion, id=inscripcion_id)
-        inscripcion.asistio = not inscripcion.asistio 
-        inscripcion.save()
-        return redirect('asistencia', clase_id=inscripcion.clase.id)
-    return redirect('admin_clases') 
+    inscripcion = get_object_or_404(Inscripcion, id=inscripcion_id)
+    inscripcion.asistio = not inscripcion.asistio 
+    inscripcion.save()
+    return redirect('asistencia', clase_id=inscripcion.clase.id) 
 
 
 
@@ -266,49 +253,59 @@ def gestion_usuarios_recepcion(request):
 
 @staff_member_required
 @transaction.atomic
+@require_POST
 def actualizar_cupos_pago(request, usuario_id):
-    if request.method == 'POST':
-        usuario = get_object_or_404(User, id=usuario_id)
-        
+    usuario = get_object_or_404(User, id=usuario_id)
+    
+    try:
         cantidad = int(request.POST.get('cupos_sumar', 0))
         monto_pagado = float(request.POST.get('monto', 0) or 0)
-        metodo = request.POST.get('metodo', 'EFECTIVO')
-
-        if cantidad > 0:
-            # Al crear el Pago, el método save() del modelo
-            # hará TODO el trabajo (Caja + Cupos + Vencimiento)
-            Pago.objects.create(
-                usuario=usuario,
-                monto=monto_pagado,
-                cantidad_clases=cantidad,
-                metodo=metodo
-            )
-            messages.success(request, f"✅ Pago registrado correctamente para {usuario.first_name}.")
-        else:
-            messages.warning(request, "⚠️ La cantidad debe ser mayor a 0.")
-            
+    except (ValueError, TypeError):
+        messages.error(request, "⚠️ Datos inválidos para cantidad o monto.")
         return redirect('recepcion')
+    
+    metodo = request.POST.get('metodo', 'EFECTIVO')
+
+    if cantidad > 0:
+        # Al crear el Pago, el método save() del modelo
+        # hará TODO el trabajo (Caja + Cupos + Vencimiento)
+        Pago.objects.create(
+            usuario=usuario,
+            monto=monto_pagado,
+            cantidad_clases=cantidad,
+            metodo=metodo
+        )
+        messages.success(request, f"✅ Pago registrado correctamente para {usuario.first_name}.")
+    else:
+        messages.warning(request, "⚠️ La cantidad debe ser mayor a 0.")
+        
+    return redirect('recepcion')
     
 @staff_member_required
 @transaction.atomic
+@require_POST
 def registrar_movimiento(request):
-    if request.method == 'POST':
-        tipo = request.POST.get('tipo') # Recibe 'INGRESO' o 'EGRESO'
-        monto = request.POST.get('monto')
-        concepto = request.POST.get('concepto')
-        metodo = request.POST.get('metodo')
+    tipo = request.POST.get('tipo') # Recibe 'INGRESO' o 'EGRESO'
+    concepto = request.POST.get('concepto')
+    metodo = request.POST.get('metodo')
 
-        if monto and concepto:
-            MovimientoCaja.objects.create(
-                tipo=tipo,
-                monto=float(monto),
-                concepto=concepto,
-                metodo=metodo
-            )
-            messages.success(request, f"✅ {tipo.capitalize()} registrado correctamente.")
-        else:
-            messages.error(request, "⚠️ Faltan datos obligatorios.")
-            
+    try:
+        monto = float(request.POST.get('monto'))
+    except (ValueError, TypeError):
+        messages.error(request, "⚠️ Monto inválido.")
+        return redirect('caja_diaria')
+
+    if monto and concepto:
+        MovimientoCaja.objects.create(
+            tipo=tipo,
+            monto=monto,
+            concepto=concepto,
+            metodo=metodo
+        )
+        messages.success(request, f"✅ {tipo.capitalize()} registrado correctamente.")
+    else:
+        messages.error(request, "⚠️ Faltan datos obligatorios.")
+        
     return redirect('caja_diaria') # Te devuelve a la planilla de caja
     
 
@@ -322,32 +319,38 @@ def caja_diaria(request):
 
     # 1. Movimientos de Dinero (Ingresos y Egresos)
     movimientos = MovimientoCaja.objects.filter(fecha__date=fecha_filtro).order_by('fecha')
+    
+    # 2. Optimized aggregates usando Case/When para reducir consultas
+    aggregates = movimientos.aggregate(
+        total_ingresos=Sum(Case(When(tipo='INGRESO', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        total_egresos=Sum(Case(When(tipo='EGRESO', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        efectivo_ingreso=Sum(Case(When(tipo='INGRESO', metodo='EFECTIVO', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        efectivo_egreso=Sum(Case(When(tipo='EGRESO', metodo='EFECTIVO', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        transf_ingreso=Sum(Case(When(tipo='INGRESO', metodo='TRANSFERENCIA', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        transf_egreso=Sum(Case(When(tipo='EGRESO', metodo='TRANSFERENCIA', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        tarjeta_ingreso=Sum(Case(When(tipo='INGRESO', metodo='TARJETA', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        tarjeta_egreso=Sum(Case(When(tipo='EGRESO', metodo='TARJETA', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+    )
+    
+    total_ingresos = aggregates['total_ingresos'] or Decimal('0')
+    total_egresos = aggregates['total_egresos'] or Decimal('0')
+    saldo_neto = total_ingresos - total_egresos
+    efectivo_dia = (aggregates['efectivo_ingreso'] or Decimal('0')) - (aggregates['efectivo_egreso'] or Decimal('0'))
+    transf_dia = (aggregates['transf_ingreso'] or Decimal('0')) - (aggregates['transf_egreso'] or Decimal('0'))
+    tarjeta_dia = (aggregates['tarjeta_ingreso'] or Decimal('0')) - (aggregates['tarjeta_egreso'] or Decimal('0'))
+    
     ingresos = movimientos.filter(tipo='INGRESO')
     egresos = movimientos.filter(tipo='EGRESO')
-
     
-    # 3. Totales
-    total_ingresos = ingresos.aggregate(Sum('monto'))['monto__sum'] or 0
-    total_egresos = egresos.aggregate(Sum('monto'))['monto__sum'] or 0
-    saldo_neto = total_ingresos - total_egresos
-    efectivo_dia = movimientos.filter(metodo='EFECTIVO', tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
-    transf_dia = movimientos.filter(metodo='TRANSFERENCIA', tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
-    tarjeta_dia = movimientos.filter(metodo='TARJETA', tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
-    efectivo_dia_salida = movimientos.filter(metodo='EFECTIVO', tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
-    transf_dia_salida = movimientos.filter(metodo='TRANSFERENCIA', tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
-    tarjeta_dia_salida = movimientos.filter(metodo='TARJETA', tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
     inicio_mes = fecha_filtro.replace(day=1)
-    total_mensual = MovimientoCaja.objects.filter(
-        tipo='INGRESO', 
+    mensual_aggregates = MovimientoCaja.objects.filter(
         fecha__date__gte=inicio_mes, 
         fecha__date__lte=fecha_filtro
-    ).aggregate(Sum('monto'))['monto__sum'] or 0
-
-    total_egresos_mes = MovimientoCaja.objects.filter(
-    tipo='EGRESO', 
-    fecha__date__gte=inicio_mes, 
-    fecha__date__lte=fecha_filtro
-    ).aggregate(Sum('monto'))['monto__sum'] or 0
+    ).aggregate(
+        ingresos_mes=Sum(Case(When(tipo='INGRESO', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+        egresos_mes=Sum(Case(When(tipo='EGRESO', then='monto'), default=0, output_field=DecimalField()), output_field=DecimalField()),
+    )
+    mensual_dia = (mensual_aggregates['ingresos_mes'] or Decimal('0')) - (mensual_aggregates['egresos_mes'] or Decimal('0'))
 
     context = {
         'ingresos': ingresos,
@@ -356,31 +359,41 @@ def caja_diaria(request):
         'total_egresos': total_egresos,
         'saldo_neto': saldo_neto,
         'fecha_filtro': fecha_filtro,
-        'efectivo_dia': efectivo_dia-efectivo_dia_salida,
-        'transf_dia': transf_dia-transf_dia_salida,
-        'tarjeta_dia': tarjeta_dia-tarjeta_dia_salida,
-        'mensual_dia': total_mensual-total_egresos_mes,
+        'efectivo_dia': efectivo_dia,
+        'transf_dia': transf_dia,
+        'tarjeta_dia': tarjeta_dia,
+        'mensual_dia': mensual_dia,
     }
     return render(request, 'recepcion/caja_diaria.html', context)
 
 @staff_member_required
+@require_POST
 def actualizar_cupos_pago_manual(request):
-    if request.method == 'POST':
-        usuario_id = request.POST.get('usuario_id')
-        nuevos_cupos = request.POST.get('nuevos_cupos')
-        perfil = get_object_or_404(Perfil, usuario_id=usuario_id)
-        perfil.clases_disponibles = nuevos_cupos
-        perfil.save()
-        messages.success(request, f"Cupos de {perfil.usuario.first_name} actualizados a {nuevos_cupos}.")
+    usuario_id = request.POST.get('usuario_id')
+    nuevos_cupos = request.POST.get('nuevos_cupos')
+    try:
+        nuevos_cupos = int(nuevos_cupos)
+    except (ValueError, TypeError):
+        messages.error(request, "⚠️ Cupos inválidos.")
+        return redirect('reporte_ganancias')
+    perfil = get_object_or_404(Perfil, usuario_id=usuario_id)
+    perfil.clases_disponibles = nuevos_cupos
+    perfil.save()
+    messages.success(request, f"Cupos de {perfil.usuario.first_name} actualizados a {nuevos_cupos}.")
     return redirect('reporte_ganancias')
 
 @staff_member_required
+@require_POST
 def sumar_cupo_rapido(request, usuario_id):
-    if request.method == 'POST':
-        perfil = get_object_or_404(Perfil, usuario_id=usuario_id)
-        perfil.clases_disponibles += 1
-        perfil.save()
-        return JsonResponse({'status': 'ok'})
+    perfil = get_object_or_404(Perfil, usuario_id=usuario_id)
+    perfil.clases_disponibles += 1
+    perfil.save()
+    return JsonResponse({'status': 'ok'})
+
+
+
+
+
 
 import random
 from django.contrib.auth.models import User
